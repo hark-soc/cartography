@@ -91,6 +91,45 @@ Representation of an Entra [User](https://learn.microsoft.com/en-us/graph/api/us
     (:EntraUser)-[:CAN_SIGN_ON_TO]->(:AWSSSOUser)
     ```
 
+### EntraDevice
+
+Representation of an Entra [Device](https://learn.microsoft.com/en-us/graph/api/device-get?view=graph-rest-1.0&tabs=http).
+
+|Field | Description|
+|-------|-------------|
+|id | Entra directory object ID of the device (GUID)|
+|device_id | Azure AD device ID (distinct from the directory object `id`)|
+|display_name | Display name of the device|
+|operating_system | Operating system of the device|
+|operating_system_version | Operating system version of the device|
+|trust_type | Trust type of the device (e.g. `AzureAd`, `ServerAd`, `Workplace`)|
+|is_compliant | Whether the device is compliant with policy|
+|is_managed | Whether the device is managed|
+|is_management_restricted | Whether management of the device is restricted|
+|management_type | Management channel of the device (e.g. `MDM`)|
+|manufacturer | Manufacturer of the device|
+|model | Model of the device|
+|profile_type | Profile type of the device (e.g. `RegisteredDevice`)|
+|device_version | Device version|
+|enrollment_type | Enrollment type of the device|
+|enrollment_profile_name | Enrollment profile name of the device|
+|account_enabled | Whether the device account is enabled|
+|approximate_last_sign_in_date_time | Approximate date and time of the device's last sign-in|
+
+#### Relationships
+
+- All Entra devices are linked to an Entra Tenant
+
+    ```cypher
+    (:EntraDevice)-[:RESOURCE]->(:EntraTenant)
+    ```
+
+- Entra devices can be owned by Entra users
+
+    ```cypher
+    (:EntraUser)-[:OWNS]->(:EntraDevice)
+    ```
+
 ### EntraOU
 Representation of an Entra [OU](https://learn.microsoft.com/en-us/graph/api/administrativeunit-get?view=graph-rest-1.0&tabs=http).
 

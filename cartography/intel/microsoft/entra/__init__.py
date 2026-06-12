@@ -11,6 +11,7 @@ from cartography.intel.microsoft.entra.app_role_assignments import (
     sync_app_role_assignments,
 )
 from cartography.intel.microsoft.entra.applications import sync_entra_applications
+from cartography.intel.microsoft.entra.devices import sync_entra_devices
 from cartography.intel.microsoft.entra.directory_roles import sync_entra_directory_roles
 from cartography.intel.microsoft.entra.federation.aws_identity_center import (
     sync_entra_federation,
@@ -100,6 +101,17 @@ def start_entra_ingestion(neo4j_session: neo4j.Session, config: Config) -> None:
 
         # Run user sync
         await sync_entra_users(
+            neo4j_session,
+            config.entra_tenant_id,
+            config.entra_client_id,
+            config.entra_client_secret,
+            config.update_tag,
+            common_job_parameters,
+        )
+
+        # Run device sync (after users so that the OWNS relationships can match
+        # already-loaded EntraUser nodes)
+        await sync_entra_devices(
             neo4j_session,
             config.entra_tenant_id,
             config.entra_client_id,

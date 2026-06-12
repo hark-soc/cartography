@@ -1,0 +1,73 @@
+name: Sync with Upstream
+
+on:
+  schedule:
+    - cron: "30 21 * * 5"  # 5th day of the week at 21:30 UTC (IST Saturdays at 3:00 AM)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      SYNC_BRANCH: upstream-sync
+
+    steps:
+      # Mint a short-lived installation token for the GitHub App. Used in
+      # place of GITHUB_TOKEN so the push can update files under
+      # .github/workflows/ (GITHUB_TOKEN has no `workflows` scope). The App
+      # must be granted Contents: write and Workflows: write permissions.
+      - name: Mint GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          # v3 renamed `app-id` to `client-id`. The variable still holds
+          # the numeric App ID; the action accepts either the numeric ID
+          # or the App's client ID under this input name.
+          client-id: ${{ vars.ONBOARDING_BOT_APP_ID }}
+          private-key: ${{ secrets.ONBOARDING_BOT_PRIVATE_KEY }}
+
+      - name: Checkout private repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/cartography-cncf/cartography.git
+          git fetch upstream
+
+      - name: Fetch all branches
+        run: |
+          git fetch origin
+          git fetch upstream
+
+      - name: Checkout sync branch
+        run: |
+          if git show-ref --verify --quiet "refs/remotes/origin/${SYNC_BRANCH}"; then
+            git checkout -B "${SYNC_BRANCH}" "origin/${SYNC_BRANCH}"
+          else
+            git checkout -b "${SYNC_BRANCH}" upstream/master
+          fi
+
+      - name: Merge upstream
+        run: |
+          git merge upstream/master --no-edit || {
+            echo "Merge conflict detected while syncing with upstream."
+            echo "Manual intervention required."
+            git diff --name-only --diff-filter=U
+            exit 1
+          }
+
+      - name: Push changes
+        run: |
+          git push origin "${SYNC_BRANCH}"

@@ -1,0 +1,57 @@
+name: Build and Push Cartography
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "Dockerfile"
+      - "cartography/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "setup.cfg"
+      - "setup.py"
+  workflow_dispatch:
+
+concurrency:
+  group: build-cartography
+  cancel-in-progress: false
+
+jobs:
+  build-and-push:
+    name: Build and Push cartography
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_BUILD_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_BUILD_TOKEN }}
+
+      - name: Get short SHA
+        id: sha
+        shell: bash
+        run: |
+          SHORT_SHA=${GITHUB_SHA::7}
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push cartography
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ vars.DOCKERHUB_BUILD_USERNAME }}/cartography:${{ steps.sha.outputs.short_sha }}
+            ${{ vars.DOCKERHUB_BUILD_USERNAME }}/cartography:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

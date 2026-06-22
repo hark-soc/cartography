@@ -6,6 +6,7 @@ on:
       - master
     paths:
       - "Dockerfile"
+      - "Dockerfile.hark"
       - "cartography/**"
       - "pyproject.toml"
       - "uv.lock"
@@ -48,7 +49,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./Dockerfile
+          file: ./Dockerfile.hark
           push: true
           tags: |
             ${{ vars.DOCKERHUB_BUILD_USERNAME }}/cartography:${{ steps.sha.outputs.short_sha }}

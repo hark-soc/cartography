@@ -4,3 +4,8 @@ venv/
 .compose
 .cache
 .local
+.git/
+__pycache__/
+*.pyc
+.mypy_cache/
+.pytest_cache/

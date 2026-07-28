@@ -5,7 +5,6 @@ from string import Template
 from cartography.models.core.common import PropertyRef
 from cartography.models.core.nodes import CartographyNodeProperties
 from cartography.models.core.nodes import CartographyNodeSchema
-from cartography.models.core.nodes import ConditionalNodeLabel
 from cartography.models.core.nodes import ExtraNodeLabels
 from cartography.models.core.relationships import CartographyRelSchema
 from cartography.models.core.relationships import LinkDirection
@@ -269,6 +268,56 @@ def _build_ontology_field_statement_mapping(
     return f"i._ont_{mapping_field.ontology_field} = {case_expr}"
 
 
+def _build_ontology_field_statement_coalesce(
+    mapping_field: OntologyFieldMapping,
+    node_property_map: dict[str, PropertyRef],
+) -> str | None:
+    """Maps the first non-null source field to an ontology field."""
+    extra_fields = mapping_field.extra.get("fields")
+    if extra_fields is None:
+        logger.warning(
+            "coalesce special handling requires 'fields' in extra for field %s",
+            mapping_field.ontology_field,
+        )
+        return None
+    if not isinstance(extra_fields, list):
+        logger.warning(
+            "coalesce special handling 'fields' in extra for field %s must be a list",
+            mapping_field.ontology_field,
+        )
+        return None
+
+    primary_property_ref = node_property_map.get(mapping_field.node_field)
+    if not primary_property_ref:
+        logger.debug(
+            "Field '%s' not found in node properties for coalesce special handling of field %s",
+            mapping_field.node_field,
+            mapping_field.ontology_field,
+        )
+        return None
+
+    property_refs = [primary_property_ref]
+    for extra_field in extra_fields:
+        extra_property_ref = node_property_map.get(extra_field)
+        if not extra_property_ref:
+            # Expected for Composite Node Pattern schemas (see comment in
+            # _build_ontology_node_properties_statement).
+            logger.debug(
+                "Extra field '%s' not found in node properties for coalesce special handling of field %s",
+                extra_field,
+                mapping_field.ontology_field,
+            )
+            continue
+        property_refs.append(extra_property_ref)
+
+    property_ref_expression = ", ".join(
+        str(property_ref) for property_ref in property_refs
+    )
+    return (
+        f"i._ont_{mapping_field.ontology_field} = coalesce({property_ref_expression})"
+    )
+
+
 def _build_ontology_node_properties_statement(
     node_schema: CartographyNodeSchema,
     node_property_map: dict[str, PropertyRef],
@@ -346,6 +395,12 @@ def _build_ontology_node_properties_statement(
             )
             if mapping_statement:
                 set_clauses.append(mapping_statement)
+        elif mapping_field.special_handling == "coalesce":
+            coalesce_statement = _build_ontology_field_statement_coalesce(
+                mapping_field, node_property_map
+            )
+            if coalesce_statement:
+                set_clauses.append(coalesce_statement)
         else:
             simple_field_template = Template("i.$node_property = $property_ref")
             set_clauses.append(
@@ -373,7 +428,7 @@ def _build_node_properties_statement(
 
     Args:
         node_property_map (Dict[str, PropertyRef]): Mapping of node attribute names as str to PropertyRef objects.
-        extra_node_labels (Optional[ExtraNodeLabels], optional): ExtraNodeLabels object to set on the node as string.
+        extra_node_labels (ExtraNodeLabels | None): Extra labels to add to the node.
             Defaults to None.
 
     Returns:
@@ -386,16 +441,17 @@ def _build_node_properties_statement(
         ...     'node_prop_2': PropertyRef("Prop2", set_in_kwargs=True),
         ... }
         >>> set_clause = _build_node_properties_statement(node_property_map)
-        >>> # Returns:
-        >>> # i.node_prop_1 = item.Prop1,
-        >>> # i.node_prop_2 = $Prop2
+        >>> set_clause
+        'i.node_prop_1 = item.Prop1,\\ni.node_prop_2 = $Prop2'
         >>> # (note: 'id' is excluded as it's handled by MERGE)
 
-        >>> # With extra labels
-        >>> extra_labels = ExtraNodeLabels(['Resource', 'CloudAsset'])
-        >>> set_clause = _build_node_properties_statement(node_property_map, extra_labels)
-        >>> # Returns the property assignments plus:
-        >>> # i:Resource:CloudAsset
+        >>> extra_node_labels = ExtraNodeLabels([RESOURCE, CLOUD_ASSET])
+        >>> set_clause = _build_node_properties_statement(
+        ...     node_property_map,
+        ...     extra_node_labels,
+        ... )
+        >>> set_clause
+        'i.node_prop_1 = item.Prop1,\\ni.node_prop_2 = $Prop2,\\n                i:Resource:CloudAsset'
 
     Note:
         The 'id' field is intentionally excluded from the SET clause as it's already
@@ -416,14 +472,13 @@ def _build_node_properties_statement(
         ],
     )
 
-    # Set extra labels on the node if specified (excluding conditional labels)
+    # Set extra labels without conditions on the node.
     if extra_node_labels:
-        # Filter out ConditionalNodeLabel objects - only include string labels
-        string_labels = [
-            label for label in extra_node_labels.labels if isinstance(label, str)
+        labels_without_conditions = [
+            label.label for label in extra_node_labels.labels if not label.conditions
         ]
-        if string_labels:
-            extra_labels = ":".join(string_labels)
+        if labels_without_conditions:
+            extra_labels = ":".join(labels_without_conditions)
             set_clause += f",\n                i:{extra_labels}"
     return set_clause
 
@@ -908,8 +963,8 @@ def _build_attach_relationships_statement(
 
     Note:
         Subqueries allow the ingestion query to continue even if we only have data
-        for some relationships. For example, if an EC2Instance has attachments to
-        NetworkInterfaces and AWSAccounts, but data only includes EC2Instance to
+        for some relationships. For example, if an AWSEC2Instance has attachments to
+        NetworkInterfaces and AWSAccounts, but data only includes AWSEC2Instance to
         AWSAccount information, the query will ignore null relationships and continue
         to MERGE the existing ones.
     """
@@ -1015,7 +1070,7 @@ def filter_selected_relationships(
 
     Examples:
         >>> node_schema = CartographyNodeSchema(
-        ...     label='EC2Instance',
+        ...     label='AWSEC2Instance',
         ...     sub_resource_relationship=account_rel,
         ...     other_relationships=OtherRelationships([vpc_rel, subnet_rel])
         ... )
@@ -1093,7 +1148,7 @@ def build_ingestion_query(
     Examples:
         >>> # Basic node schema with relationships
         >>> node_schema = CartographyNodeSchema(
-        ...     label='EC2Instance',
+        ...     label='AWSEC2Instance',
         ...     properties=EC2InstanceProperties(),
         ...     sub_resource_relationship=account_rel,
         ...     other_relationships=OtherRelationships([vpc_rel, subnet_rel])
@@ -1171,10 +1226,6 @@ def build_conditional_label_queries(
     """
     Generate Neo4j queries to apply conditional labels to nodes.
 
-    Conditional labels are labels that are only applied to nodes matching specific conditions.
-    This function generates one query per ConditionalNodeLabel defined in the node schema's
-    extra_node_labels.
-
     Args:
         node_schema (CartographyNodeSchema): The CartographyNodeSchema object containing
             conditional labels in its extra_node_labels property.
@@ -1184,32 +1235,16 @@ def build_conditional_label_queries(
             nodes of the schema's primary label that satisfy the conditions, and applies
             the conditional label.
 
-    Examples:
-        >>> # Given a schema with a conditional label
-        >>> node_schema = CartographyNodeSchema(
-        ...     label='AWSResource',
-        ...     extra_node_labels=ExtraNodeLabels([
-        ...         'Resource',
-        ...         ConditionalNodeLabel(label='Critical', conditions={'severity': 'high'}),
-        ...     ])
-        ... )
-        >>> queries = build_conditional_label_queries(node_schema)
-        >>> # Returns:
-        >>> # ['MATCH (n:AWSResource) WHERE n.severity = "high" SET n:Critical']
-
     Note:
-        - Only ConditionalNodeLabel objects are processed; string labels are ignored
+        - Labels with empty conditions are applied by the ingestion query
         - Returns an empty list if no conditional labels are defined
         - Values are escaped for Cypher string literals
     """
     if not node_schema.extra_node_labels:
         return []
 
-    # Extract only ConditionalNodeLabel objects
     conditional_labels = [
-        label
-        for label in node_schema.extra_node_labels.labels
-        if isinstance(label, ConditionalNodeLabel)
+        label for label in node_schema.extra_node_labels.labels if label.conditions
     ]
 
     if not conditional_labels:
@@ -1265,20 +1300,9 @@ def build_conditional_label_queries(
         )
 
     for cond_label in conditional_labels:
-        # Skip conditional labels with empty conditions - they would apply to all nodes,
-        # which should be done with a regular string label instead
-        if not cond_label.conditions:
-            logger.warning(
-                "ConditionalNodeLabel '%s' on node schema '%s' has empty conditions. "
-                "Skipping. Use a string label instead to apply a label to all nodes.",
-                cond_label.label,
-                node_schema.label,
-            )
-            continue
-
         # Build WHERE clause from conditions
         where_parts = []
-        for field_name, field_value in cond_label.conditions.items():
+        for field_name, field_value in cond_label.conditions:
             # Escape the value for Cypher string literal
             escaped_value = _escape_cypher_string(str(field_value))
             where_parts.append(f'n.{field_name} = "{escaped_value}"')
@@ -1376,37 +1400,21 @@ def build_create_index_queries(node_schema: CartographyNodeSchema) -> list[str]:
     ]
     if node_schema.extra_node_labels:
         for label in node_schema.extra_node_labels.labels:
-            if isinstance(label, str):
-                # Simple string label - create index on id and lastupdated
-                result.append(
-                    index_template.safe_substitute(
-                        TargetNodeLabel=label,
-                        TargetAttribute="id",  # Precondition: 'id' is defined on all cartography node_schema objects.
-                    ),
-                )
-                result.append(
-                    index_template.safe_substitute(
-                        TargetNodeLabel=label,
-                        TargetAttribute="lastupdated",
-                    ),
-                )
-            elif isinstance(label, ConditionalNodeLabel):
-                # Conditional label - create index on the conditional label's id and lastupdated
-                result.append(
-                    index_template.safe_substitute(
-                        TargetNodeLabel=label.label,
-                        TargetAttribute="id",
-                    ),
-                )
-                result.append(
-                    index_template.safe_substitute(
-                        TargetNodeLabel=label.label,
-                        TargetAttribute="lastupdated",
-                    ),
-                )
-                # Also create indexes on the condition fields for the primary node label
-                # to speed up the WHERE clause in the conditional label query
-                for condition_field in label.conditions.keys():
+            result.append(
+                index_template.safe_substitute(
+                    TargetNodeLabel=label.label,
+                    TargetAttribute="id",  # Precondition: 'id' is defined on all cartography node_schema objects.
+                ),
+            )
+            result.append(
+                index_template.safe_substitute(
+                    TargetNodeLabel=label.label,
+                    TargetAttribute="lastupdated",
+                ),
+            )
+            if label.conditions:
+                # Index condition fields on the primary label to speed up matching.
+                for condition_field, _ in label.conditions:
                     result.append(
                         index_template.safe_substitute(
                             TargetNodeLabel=node_schema.label,
@@ -1449,10 +1457,9 @@ def build_create_index_queries(node_schema: CartographyNodeSchema) -> list[str]:
     ontology_mapping = get_semantic_label_mapping_from_node_schema(node_schema)
     if ontology_mapping and node_schema.extra_node_labels:
         for label in node_schema.extra_node_labels.labels:
-            label_name = label if isinstance(label, str) else label.label
             result.append(
                 index_template.safe_substitute(
-                    TargetNodeLabel=label_name,
+                    TargetNodeLabel=label.label,
                     TargetAttribute="_ont_source",
                 ),
             )
@@ -1461,7 +1468,7 @@ def build_create_index_queries(node_schema: CartographyNodeSchema) -> list[str]:
                     continue
                 result.append(
                     index_template.safe_substitute(
-                        TargetNodeLabel=label_name,
+                        TargetNodeLabel=label.label,
                         TargetAttribute=f"_ont_{mapping_field.ontology_field}",
                     ),
                 )

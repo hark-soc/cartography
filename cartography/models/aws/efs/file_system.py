@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from cartography.models.aws.extra_labels import LEGACY_EFS_FILE_SYSTEM
 from cartography.models.core.common import PropertyRef
 from cartography.models.core.nodes import CartographyNodeProperties
 from cartography.models.core.nodes import CartographyNodeSchema
@@ -10,6 +11,7 @@ from cartography.models.core.relationships import LinkDirection
 from cartography.models.core.relationships import make_target_node_matcher
 from cartography.models.core.relationships import OtherRelationships
 from cartography.models.core.relationships import TargetNodeMatcher
+from cartography.models.ontology.labels import FILE_STORAGE
 
 
 @dataclass(frozen=True)
@@ -63,7 +65,7 @@ class EfsFileSystemToKMSKeyRelProperties(CartographyRelProperties):
 # Only created when the file system has a customer-managed KMS key (KmsKeyId is
 # the key ARN).
 class EfsFileSystemToKMSKeyRel(CartographyRelSchema):
-    target_node_label: str = "KMSKey"
+    target_node_label: str = "AWSKMSKey"
     target_node_matcher: TargetNodeMatcher = make_target_node_matcher(
         {"arn": PropertyRef("KmsKeyId")},
     )
@@ -76,9 +78,12 @@ class EfsFileSystemToKMSKeyRel(CartographyRelSchema):
 
 @dataclass(frozen=True)
 class EfsFileSystemSchema(CartographyNodeSchema):
-    label: str = "EfsFileSystem"
+    label: str = "AWSEfsFileSystem"
     properties: EfsFileSystemNodeProperties = EfsFileSystemNodeProperties()
-    extra_node_labels: ExtraNodeLabels = ExtraNodeLabels(["FileStorage"])
+    # DEPRECATED: legacy EfsFileSystem node label will be removed in v1.0.0.
+    extra_node_labels: ExtraNodeLabels = ExtraNodeLabels(
+        [LEGACY_EFS_FILE_SYSTEM, FILE_STORAGE]
+    )
     sub_resource_relationship: EfsFileSystemToAWSAccountRel = (
         EfsFileSystemToAWSAccountRel()
     )

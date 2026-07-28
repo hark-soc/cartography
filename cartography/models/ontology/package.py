@@ -10,6 +10,7 @@ from cartography.models.core.relationships import LinkDirection
 from cartography.models.core.relationships import make_target_node_matcher
 from cartography.models.core.relationships import OtherRelationships
 from cartography.models.core.relationships import TargetNodeMatcher
+from cartography.models.ontology.labels import ONTOLOGY
 
 
 @dataclass(frozen=True)
@@ -87,6 +88,18 @@ class PackageToGitHubDependencyRel(CartographyRelSchema):
     properties: PackageToNodeRelProperties = PackageToNodeRelProperties()
 
 
+# (:Package)-[:DETECTED_AS]->(:SemgrepDependency) (SemgrepGoLibrary / SemgrepNpmLibrary)
+@dataclass(frozen=True)
+class PackageToSemgrepDependencyRel(CartographyRelSchema):
+    target_node_label: str = "SemgrepDependency"
+    target_node_matcher: TargetNodeMatcher = make_target_node_matcher(
+        {"normalized_id": PropertyRef("normalized_id")},
+    )
+    direction: LinkDirection = LinkDirection.OUTWARD
+    rel_label: str = "DETECTED_AS"
+    properties: PackageToNodeRelProperties = PackageToNodeRelProperties()
+
+
 @dataclass(frozen=True)
 class PackageToOntologyImageRel(CartographyRelSchema):
     """
@@ -94,7 +107,7 @@ class PackageToOntologyImageRel(CartographyRelSchema):
 
     The target matcher is intentionally irrelevant here: GraphJob unscoped cleanup
     only needs the relationship label and target node label to delete stale
-    DEPLOYED edges. Relationship creation happens via ontology_packages_linking.json
+    DEPLOYED edges. Relationship creation happens via the ontology package analysis jobs
     which traverses the scanner package path (Package -> DETECTED_AS -> TrivyPackage/SyftPackage -> DEPLOYED -> Image).
     """
 
@@ -143,7 +156,7 @@ class TrivyImageFindingToPackageRel(CartographyRelSchema):
 @dataclass(frozen=True)
 class PackageSchema(CartographyNodeSchema):
     label: str = "Package"
-    extra_node_labels: ExtraNodeLabels = ExtraNodeLabels(["Ontology"])
+    extra_node_labels: ExtraNodeLabels = ExtraNodeLabels([ONTOLOGY])
     properties: PackageNodeProperties = PackageNodeProperties()
     scoped_cleanup: bool = False
     # Include propagated relationship types so GraphJob cleanup removes stale
@@ -155,6 +168,7 @@ class PackageSchema(CartographyNodeSchema):
             PackageToSocketDevDependencyRel(),
             PackageToGitLabDependencyRel(),
             PackageToGitHubDependencyRel(),
+            PackageToSemgrepDependencyRel(),
             PackageToOntologyImageRel(),
             PackageToTrivyFixRel(),
             PackageToPackageDependsOnRel(),

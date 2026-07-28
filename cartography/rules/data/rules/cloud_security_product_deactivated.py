@@ -11,27 +11,33 @@ aws_guard_duty_detector_disabled = Fact(
     name="GuardDuty Detector Disabled",
     description="Finds regions where GuardDuty Detector is disabled.",
     cypher_query="""
-    MATCH (a:AWSAccount)-[:RESOURCE]-(r:EC2Instance|EKSCluster|AWSLambda|ECSCluster|RDSInstance|RDSCluster)
+    MATCH (a:AWSAccount)-[:RESOURCE]-(r:AWSEC2Instance|AWSEKSCluster|AWSLambda|AWSECSCluster|AWSRDSInstance|AWSRDSCluster)
     WHERE NOT EXISTS {
-        MATCH (a)-[:RESOURCE]->(d:GuardDutyDetector{status: "ENABLED"})
+        MATCH (a)-[:RESOURCE]->(d:AWSGuardDutyDetector{status: "ENABLED"})
         WHERE d.region = r.region
     }
     RETURN DISTINCT r.region AS region, a.name AS account_name, a.id AS account_id
     ORDER BY r.region, a.name
     """,
     cypher_visual_query="""
-    MATCH (a:AWSAccount)-[:RESOURCE]-(r:EC2Instance|EKSCluster|AWSLambda|ECSCluster|RDSInstance|RDSCluster)
+    MATCH (a:AWSAccount)-[:RESOURCE]-(r:AWSEC2Instance|AWSEKSCluster|AWSLambda|AWSECSCluster|AWSRDSInstance|AWSRDSCluster)
     WHERE NOT EXISTS {
-        MATCH (a)-[:RESOURCE]->(d:GuardDutyDetector{status: "ENABLED"})
+        MATCH (a)-[:RESOURCE]->(d:AWSGuardDutyDetector{status: "ENABLED"})
         WHERE d.region = r.region
     }
     RETURN *
     """,
     cypher_count_query="""
-    MATCH (a:AWSAccount)-[:RESOURCE]-(r:EC2Instance|EKSCluster|AWSLambda|ECSCluster|RDSInstance|RDSCluster)
-    WITH DISTINCT a, r.region AS region
+    MATCH (a:AWSAccount)-[:RESOURCE]-(r:AWSEC2Instance|AWSEKSCluster|AWSLambda|AWSECSCluster|AWSRDSInstance|AWSRDSCluster)
+    WITH DISTINCT a
     RETURN COUNT(*) AS count
     """,
+    # Anchor on the AWSAccount node. NOTE: the finding unit is (account, region), so
+    # account_id driving the failing-count collapses multiple disabled regions of one
+    # account into a single failing asset; the (account_id, region) identity_fields keep
+    # each region's finding distinct.
+    asset_label="AWSAccount",
+    asset_id_field="account_id",
     identity_fields=("account_id", "region"),
     module=Module.AWS,
     maturity=Maturity.EXPERIMENTAL,

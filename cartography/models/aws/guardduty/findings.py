@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from cartography.models.aws.extra_labels import LEGACY_GUARD_DUTY_FINDING
 from cartography.models.core.common import PropertyRef
 from cartography.models.core.nodes import CartographyNodeProperties
 from cartography.models.core.nodes import CartographyNodeSchema
@@ -10,6 +11,8 @@ from cartography.models.core.relationships import LinkDirection
 from cartography.models.core.relationships import make_target_node_matcher
 from cartography.models.core.relationships import OtherRelationships
 from cartography.models.core.relationships import TargetNodeMatcher
+from cartography.models.extra_labels import RISK
+from cartography.models.ontology.labels import SECURITY_ISSUE
 
 
 @dataclass(frozen=True)
@@ -20,6 +23,9 @@ class GuardDutyFindingNodeProperties(CartographyNodeProperties):
     description: PropertyRef = PropertyRef("description")
     type: PropertyRef = PropertyRef("type")
     severity: PropertyRef = PropertyRef("severity", extra_index=True)
+    # Normalized Low/Medium/High/Critical label derived from the numeric severity,
+    # feeding the :SecurityIssue ontology's _ont_severity for cross-provider comparison.
+    severity_label: PropertyRef = PropertyRef("severity_label")
     confidence: PropertyRef = PropertyRef("confidence")
     createdat: PropertyRef = PropertyRef("createdat")
     updatedat: PropertyRef = PropertyRef("updatedat")
@@ -89,7 +95,7 @@ class GuardDutyFindingToEC2InstanceRelRelProperties(CartographyRelProperties):
 
 @dataclass(frozen=True)
 class GuardDutyFindingToEC2InstanceRel(CartographyRelSchema):
-    target_node_label: str = "EC2Instance"
+    target_node_label: str = "AWSEC2Instance"
     target_node_matcher: TargetNodeMatcher = make_target_node_matcher(
         {"id": PropertyRef("resource_id")},
     )
@@ -107,7 +113,7 @@ class GuardDutyFindingToGuardDutyDetectorRelRelProperties(CartographyRelProperti
 
 @dataclass(frozen=True)
 class GuardDutyFindingToGuardDutyDetectorRel(CartographyRelSchema):
-    target_node_label: str = "GuardDutyDetector"
+    target_node_label: str = "AWSGuardDutyDetector"
     target_node_matcher: TargetNodeMatcher = make_target_node_matcher(
         {"id": PropertyRef("detectorid")},
     )
@@ -143,7 +149,7 @@ class GuardDutyFindingToEKSClusterRelRelProperties(CartographyRelProperties):
 
 @dataclass(frozen=True)
 class GuardDutyFindingToEKSClusterRel(CartographyRelSchema):
-    target_node_label: str = "EKSCluster"
+    target_node_label: str = "AWSEKSCluster"
     target_node_matcher: TargetNodeMatcher = make_target_node_matcher(
         {"id": PropertyRef("eks_cluster_arn")},
     )
@@ -161,7 +167,7 @@ class GuardDutyFindingToS3BucketRelRelProperties(CartographyRelProperties):
 
 @dataclass(frozen=True)
 class GuardDutyFindingToS3BucketRel(CartographyRelSchema):
-    target_node_label: str = "S3Bucket"
+    target_node_label: str = "AWSS3Bucket"
     target_node_matcher: TargetNodeMatcher = make_target_node_matcher(
         {"id": PropertyRef("resource_id")},
     )
@@ -179,7 +185,7 @@ class GuardDutyFindingToAccountAccessKeyRelRelProperties(CartographyRelPropertie
 
 @dataclass(frozen=True)
 class GuardDutyFindingToAccountAccessKeyRel(CartographyRelSchema):
-    target_node_label: str = "AccountAccessKey"
+    target_node_label: str = "AWSAccountAccessKey"
     target_node_matcher: TargetNodeMatcher = make_target_node_matcher(
         {"id": PropertyRef("access_key_id")},
     )
@@ -228,9 +234,12 @@ class GuardDutyFindingToAWSRoleRel(CartographyRelSchema):
 
 @dataclass(frozen=True)
 class GuardDutyFindingSchema(CartographyNodeSchema):
-    label: str = "GuardDutyFinding"
+    label: str = "AWSGuardDutyFinding"
     properties: GuardDutyFindingNodeProperties = GuardDutyFindingNodeProperties()
-    extra_node_labels: ExtraNodeLabels = ExtraNodeLabels(["Risk", "SecurityIssue"])
+    # DEPRECATED: legacy GuardDutyFinding node label will be removed in v1.0.0.
+    extra_node_labels: ExtraNodeLabels = ExtraNodeLabels(
+        [LEGACY_GUARD_DUTY_FINDING, RISK, SECURITY_ISSUE]
+    )
     sub_resource_relationship: GuardDutyFindingToAWSAccountRel = (
         GuardDutyFindingToAWSAccountRel()
     )

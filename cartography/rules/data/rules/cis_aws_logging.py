@@ -31,7 +31,7 @@ CIS_REFERENCES = [
 
 # =============================================================================
 # CIS AWS 4.1: CloudTrail is enabled in all regions
-# Main node: CloudTrailTrail
+# Main node: AWSCloudTrailTrail
 # =============================================================================
 class CloudTrailMultiRegionOutput(Finding):
     """Output model for CloudTrail multi-region check."""
@@ -53,7 +53,7 @@ _aws_cloudtrail_not_multi_region = Fact(
         "visibility into API activity across the entire AWS infrastructure."
     ),
     cypher_query="""
-    MATCH (a:AWSAccount)-[:RESOURCE]->(trail:CloudTrailTrail)
+    MATCH (a:AWSAccount)-[:RESOURCE]->(trail:AWSCloudTrailTrail)
     WHERE trail.is_multi_region_trail IS NULL OR trail.is_multi_region_trail = false
     RETURN
         trail.name AS trail_name,
@@ -64,14 +64,15 @@ _aws_cloudtrail_not_multi_region = Fact(
         a.name AS account
     """,
     cypher_visual_query="""
-    MATCH p=(a:AWSAccount)-[:RESOURCE]->(trail:CloudTrailTrail)
+    MATCH p=(a:AWSAccount)-[:RESOURCE]->(trail:AWSCloudTrailTrail)
     WHERE trail.is_multi_region_trail IS NULL OR trail.is_multi_region_trail = false
     RETURN *
     """,
     cypher_count_query="""
-    MATCH (trail:CloudTrailTrail)
+    MATCH (trail:AWSCloudTrailTrail)
     RETURN COUNT(trail) AS count
     """,
+    asset_label="AWSCloudTrailTrail",
     asset_id_field="trail_arn",
     identity_fields=("trail_arn",),
     module=Module.AWS,
@@ -100,7 +101,7 @@ aws_cloudtrail_multi_region = Rule(
 
 # =============================================================================
 # CloudTrail Log File Validation
-# Main node: CloudTrailTrail
+# Main node: AWSCloudTrailTrail
 # =============================================================================
 class CloudTrailLogValidationOutput(Finding):
     """Output model for CloudTrail log validation check."""
@@ -122,7 +123,7 @@ _aws_cloudtrail_log_validation_disabled = Fact(
         "generating a digitally signed digest file."
     ),
     cypher_query="""
-    MATCH (a:AWSAccount)-[:RESOURCE]->(trail:CloudTrailTrail)
+    MATCH (a:AWSAccount)-[:RESOURCE]->(trail:AWSCloudTrailTrail)
     WHERE trail.log_file_validation_enabled IS NULL OR trail.log_file_validation_enabled = false
     RETURN
         trail.name AS trail_name,
@@ -133,14 +134,15 @@ _aws_cloudtrail_log_validation_disabled = Fact(
         a.name AS account
     """,
     cypher_visual_query="""
-    MATCH p=(a:AWSAccount)-[:RESOURCE]->(trail:CloudTrailTrail)
+    MATCH p=(a:AWSAccount)-[:RESOURCE]->(trail:AWSCloudTrailTrail)
     WHERE trail.log_file_validation_enabled IS NULL OR trail.log_file_validation_enabled = false
     RETURN *
     """,
     cypher_count_query="""
-    MATCH (trail:CloudTrailTrail)
+    MATCH (trail:AWSCloudTrailTrail)
     RETURN COUNT(trail) AS count
     """,
+    asset_label="AWSCloudTrailTrail",
     asset_id_field="trail_arn",
     identity_fields=("trail_arn",),
     module=Module.AWS,
@@ -168,7 +170,7 @@ aws_cloudtrail_log_file_validation = Rule(
 
 # =============================================================================
 # CIS AWS 4.4: Server access logging on the CloudTrail S3 bucket
-# Main node: S3Bucket
+# Main node: AWSS3Bucket
 # =============================================================================
 class CloudTrailBucketAccessLoggingOutput(Finding):
     """Output model for CloudTrail S3 bucket access logging check."""
@@ -192,7 +194,7 @@ _aws_cloudtrail_bucket_access_logging_disabled = Fact(
         "captures requests against audit logs themselves."
     ),
     cypher_query="""
-    MATCH (a:AWSAccount)-[:RESOURCE]->(trail:CloudTrailTrail)-[:LOGS_TO]->(bucket:S3Bucket)
+    MATCH (a:AWSAccount)-[:RESOURCE]->(trail:AWSCloudTrailTrail)-[:LOGS_TO]->(bucket:AWSS3Bucket)
     WHERE bucket.logging_enabled IS NULL OR bucket.logging_enabled = false
     RETURN
         bucket.name AS bucket_name,
@@ -205,14 +207,15 @@ _aws_cloudtrail_bucket_access_logging_disabled = Fact(
         a.name AS account
     """,
     cypher_visual_query="""
-    MATCH p=(a:AWSAccount)-[:RESOURCE]->(trail:CloudTrailTrail)-[:LOGS_TO]->(bucket:S3Bucket)
+    MATCH p=(a:AWSAccount)-[:RESOURCE]->(trail:AWSCloudTrailTrail)-[:LOGS_TO]->(bucket:AWSS3Bucket)
     WHERE bucket.logging_enabled IS NULL OR bucket.logging_enabled = false
     RETURN *
     """,
     cypher_count_query="""
-    MATCH (:CloudTrailTrail)-[:LOGS_TO]->(bucket:S3Bucket)
+    MATCH (:AWSCloudTrailTrail)-[:LOGS_TO]->(bucket:AWSS3Bucket)
     RETURN COUNT(DISTINCT bucket) AS count
     """,
+    asset_label="AWSS3Bucket",
     asset_id_field="bucket_id",
     identity_fields=("bucket_id",),
     module=Module.AWS,
@@ -240,7 +243,7 @@ aws_cloudtrail_s3_bucket_access_logging = Rule(
 
 # =============================================================================
 # CloudTrail KMS Encryption
-# Main node: CloudTrailTrail
+# Main node: AWSCloudTrailTrail
 # =============================================================================
 class CloudTrailEncryptionOutput(Finding):
     """Output model for CloudTrail encryption check."""
@@ -262,7 +265,7 @@ _aws_cloudtrail_not_encrypted = Fact(
         "an additional layer of security for sensitive API activity data."
     ),
     cypher_query="""
-    MATCH (a:AWSAccount)-[:RESOURCE]->(trail:CloudTrailTrail)
+    MATCH (a:AWSAccount)-[:RESOURCE]->(trail:AWSCloudTrailTrail)
     WHERE trail.kms_key_id IS NULL OR trail.kms_key_id = ''
     RETURN
         trail.name AS trail_name,
@@ -273,14 +276,15 @@ _aws_cloudtrail_not_encrypted = Fact(
         a.name AS account
     """,
     cypher_visual_query="""
-    MATCH p=(a:AWSAccount)-[:RESOURCE]->(trail:CloudTrailTrail)
+    MATCH p=(a:AWSAccount)-[:RESOURCE]->(trail:AWSCloudTrailTrail)
     WHERE trail.kms_key_id IS NULL OR trail.kms_key_id = ''
     RETURN *
     """,
     cypher_count_query="""
-    MATCH (trail:CloudTrailTrail)
+    MATCH (trail:AWSCloudTrailTrail)
     RETURN COUNT(trail) AS count
     """,
+    asset_label="AWSCloudTrailTrail",
     asset_id_field="trail_arn",
     identity_fields=("trail_arn",),
     module=Module.AWS,

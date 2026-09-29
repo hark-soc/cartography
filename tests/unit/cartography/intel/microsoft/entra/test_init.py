@@ -15,6 +15,7 @@ def _mock_dataset_syncs(monkeypatch) -> dict[str, AsyncMock]:
         for name in (
             "sync_tenant",
             "sync_entra_users",
+            "sync_entra_devices",
             "sync_entra_groups",
             "sync_entra_ous",
             "sync_entra_applications",
@@ -51,7 +52,13 @@ def test_delegated_auth_continues_after_denied_dataset(monkeypatch, caplog) -> N
         entra.start_entra_ingestion(MagicMock(), config)
 
     # Assert
-    for sync in syncs.values():
+    # sync_entra_devices takes no delegated_auth kwarg and is a
+    # ClientSecretCredential-only dataset -- start_entra_ingestion skips it
+    # outright under delegated auth rather than letting it raise ValueError.
+    syncs["sync_entra_devices"].assert_not_awaited()
+    for name, sync in syncs.items():
+        if name == "sync_entra_devices":
+            continue
         sync.assert_awaited_once()
         assert sync.call_args.kwargs["delegated_auth"] is True
     federation.assert_not_awaited()

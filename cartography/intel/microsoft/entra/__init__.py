@@ -164,13 +164,32 @@ def start_entra_ingestion(neo4j_session: neo4j.Session, config: Config) -> None:
         )
         # Run device sync (after users so that the OWNS relationships can match
         # already-loaded EntraUser nodes). No delegated_auth kwarg: this is a
-        # HarkX-only dataset upstream doesn't have, so it degrades the same way
-        # it always did under delegated auth -- a denial raises rather than
-        # being caught as partial-visibility.
-        await run_dataset(
-            "devices",
-            sync_entra_devices(*sync_args),
-        )
+        # HarkX-only dataset upstream doesn't have, so it always builds a
+        # ClientSecretCredential -- which requires client_id/client_secret and
+        # raises ValueError with neither, as delegated auth provides. Skip it
+        # outright under delegated auth rather than letting that abort every
+        # dataset still to run.
+        if not delegated_auth:
+            # The guard at the top of this function already ensures both are
+            # set whenever delegated_auth is False; make that visible to mypy,
+            # since sync_entra_devices (unlike its siblings) requires non-None
+            # credentials -- it always builds a ClientSecretCredential. Passed
+            # explicitly rather than via *sync_args, since that tuple's static
+            # type was fixed before this narrowing and an unpack doesn't
+            # re-check it.
+            assert client_id is not None
+            assert client_secret is not None
+            await run_dataset(
+                "devices",
+                sync_entra_devices(
+                    neo4j_session,
+                    tenant_id,
+                    client_id,
+                    client_secret,
+                    config.update_tag,
+                    common_job_parameters,
+                ),
+            )
         await run_dataset(
             "groups",
             sync_entra_groups(*sync_args, delegated_auth=delegated_auth),
